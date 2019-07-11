@@ -44,14 +44,6 @@ const userCounts = {};
 const userSockets = {};
 const userAttributes = {};
 
-const clientIDs = {};
-
-const roomPaths = {};
-const parentRoomPaths = {};
-const roomNames = {};
-
-const sendToRoomUsers = {};
-
 const socketPolicyFileServer = new XMLSocket.SocketPolicyFileServer(
   {
     host: HOST,
@@ -64,244 +56,224 @@ const server = new XMLSocket.Server(
     host: HOST,
     port: PORT,
   },
-  (client, socketID) => {
-    sendToRoomUsers[socketID] = (
-      message,
-      sockets = userSockets[roomPaths[socketID]],
-    ) => {
+  (client, registerHandlers) => {
+    let clientID;
+
+    let roomPath;
+    let parentRoomPath;
+    let roomName;
+
+    const sendToRoomUsers = (message, sockets = userSockets[roomPath]) => {
       Object.values(sockets).forEach((socket) => {
         socket.write(message);
       });
     };
-  },
-  {
-    MojaChat: (client, socketID) => {
-      if (freeIDs.length) {
-        clientIDs[socketID] = freeIDs.pop();
-      } else {
-        maxID += 1;
-        clientIDs[socketID] = maxID;
-      }
 
-      loggedIDs[clientIDs[socketID]] =
-        (loggedIDs[clientIDs[socketID]] || 0) + 1;
-
-      client.write(`+connect id=${clientIDs[socketID]}\0`);
-      client.write(`<CONNECT id="${clientIDs[socketID]}" />\0`);
-    },
-    '<policy-file-request>': () => {},
-    '<NOP>': () => {},
-    '<ENTER>': (client, socketID, attributes) => {
-      roomPaths[socketID] = path.normalize(attributes.room);
-      parentRoomPaths[socketID] = path.dirname(roomPaths[socketID]);
-      roomNames[socketID] = path.basename(roomPaths[socketID]);
-
-      const umax = Number(attributes.umax);
-
-      if (
-        umax &&
-        userCounts[roomPaths[socketID]] &&
-        userCounts[roomPaths[socketID]] >= umax
-      ) {
-        client.write('<FULL />\0');
-        return;
-      }
-
-      userCounts[roomPaths[socketID]] =
-        (userCounts[roomPaths[socketID]] || 0) + 1;
-
-      userSockets[roomPaths[socketID]] = userSockets[roomPaths[socketID]] || {};
-      userSockets[roomPaths[socketID]][clientIDs[socketID]] = client;
-
-      userAttributes[roomPaths[socketID]] =
-        userAttributes[roomPaths[socketID]] || {};
-
-      if (Object.entries(userAttributes[roomPaths[socketID]]).length) {
-        client.write(
-          `<ROOM>${Object.values(userAttributes[roomPaths[socketID]])
-            .map(
-              (value) =>
-                `<USER${[
-                  'r',
-                  'name',
-                  'id',
-                  'trip',
-                  'ihash',
-                  'stat',
-                  'g',
-                  'type',
-                  'b',
-                  'y',
-                  'x',
-                  'scl',
-                ]
-                  .map((name) =>
-                    value[name] ? ` ${name}="${value[name]}"` : '',
-                  )
-                  .join('')} />`,
-            )
-            .join('')}</ROOM>\0`,
-        );
-      } else {
-        client.write('<ROOM />\0');
-      }
-
-      userAttributes[roomPaths[socketID]][clientIDs[socketID]] = attributes;
-
-      userAttributes[roomPaths[socketID]][clientIDs[socketID]].id =
-        clientIDs[socketID];
-
-      if ('trip' in attributes) {
-        userAttributes[roomPaths[socketID]][
-          clientIDs[socketID]
-        ].trip = tripcode(attributes.trip);
-      }
-
-      userAttributes[roomPaths[socketID]][clientIDs[socketID]].ihash = tripcode(
-        client.remoteAddress,
-      );
-
-      if (attributes.attrib === 'no') {
-        client.write(
-          `<UINFO${['name', 'trip', 'id']
-            .map((name) =>
-              attributes[name] ? ` ${name}="${attributes[name]}"` : '',
-            )
-            .join('')} />\0`,
-        );
-
-        const childRoomUserCounts = {};
-
-        for (let i = 1; i <= NUMBER_OF_ROOMS; i += 1) {
-          const childRoomPath = `${roomPaths[socketID]}/${i}`;
-
-          if (childRoomPath in userCounts) {
-            childRoomUserCounts[i] = userCounts[childRoomPath];
-          }
+    registerHandlers({
+      MojaChat: () => {
+        if (freeIDs.length) {
+          clientID = freeIDs.pop();
+        } else {
+          maxID += 1;
+          clientID = maxID;
         }
 
-        if (Object.entries(childRoomUserCounts).length) {
+        loggedIDs[clientID] = (loggedIDs[clientID] || 0) + 1;
+
+        client.write(`+connect id=${clientID}\0`);
+        client.write(`<CONNECT id="${clientID}" />\0`);
+      },
+      '<policy-file-request>': () => {},
+      '<NOP>': () => {},
+      '<ENTER>': (attributes) => {
+        roomPath = path.normalize(attributes.room);
+        parentRoomPath = path.dirname(roomPath);
+        roomName = path.basename(roomPath);
+
+        const umax = Number(attributes.umax);
+
+        if (umax && userCounts[roomPath] && userCounts[roomPath] >= umax) {
+          client.write('<FULL />\0');
+          return;
+        }
+
+        userCounts[roomPath] = (userCounts[roomPath] || 0) + 1;
+
+        userSockets[roomPath] = userSockets[roomPath] || {};
+        userSockets[roomPath][clientID] = client;
+
+        userAttributes[roomPath] = userAttributes[roomPath] || {};
+
+        if (Object.entries(userAttributes[roomPath]).length) {
           client.write(
-            `<COUNT>${Object.entries(childRoomUserCounts)
-              .map(([number, count]) => `<ROOM c="${count}" n="${number}" />`)
-              .join('')}</COUNT>\0`,
+            `<ROOM>${Object.values(userAttributes[roomPath])
+              .map(
+                (value) =>
+                  `<USER${[
+                    'r',
+                    'name',
+                    'id',
+                    'trip',
+                    'ihash',
+                    'stat',
+                    'g',
+                    'type',
+                    'b',
+                    'y',
+                    'x',
+                    'scl',
+                  ]
+                    .map((name) =>
+                      value[name] ? ` ${name}="${value[name]}"` : '',
+                    )
+                    .join('')} />`,
+              )
+              .join('')}</ROOM>\0`,
+          );
+        } else {
+          client.write('<ROOM />\0');
+        }
+
+        userAttributes[roomPath][clientID] = attributes;
+
+        userAttributes[roomPath][clientID].id = clientID;
+
+        if ('trip' in attributes) {
+          userAttributes[roomPath][clientID].trip = tripcode(attributes.trip);
+        }
+
+        userAttributes[roomPath][clientID].ihash = tripcode(
+          client.remoteAddress,
+        );
+
+        if (attributes.attrib === 'no') {
+          client.write(
+            `<UINFO${['name', 'trip', 'id']
+              .map((name) =>
+                attributes[name] ? ` ${name}="${attributes[name]}"` : '',
+              )
+              .join('')} />\0`,
+          );
+
+          const childRoomUserCounts = {};
+
+          for (let i = 1; i <= NUMBER_OF_ROOMS; i += 1) {
+            const childRoomPath = `${roomPath}/${i}`;
+
+            if (childRoomPath in userCounts) {
+              childRoomUserCounts[i] = userCounts[childRoomPath];
+            }
+          }
+
+          if (Object.entries(childRoomUserCounts).length) {
+            client.write(
+              `<COUNT>${Object.entries(childRoomUserCounts)
+                .map(([number, count]) => `<ROOM c="${count}" n="${number}" />`)
+                .join('')}</COUNT>\0`,
+            );
+          }
+
+          sendToRoomUsers(`<ENTER id="${clientID}" />\0`);
+        } else {
+          sendToRoomUsers(
+            `<ENTER${RECOGNIZED_ATTRIBUTES.ENTER.map((name) =>
+              attributes[name] ? ` ${name}="${attributes[name]}"` : '',
+            ).join('')} />\0`,
           );
         }
 
-        sendToRoomUsers[socketID](`<ENTER id="${clientIDs[socketID]}" />\0`);
-      } else {
-        sendToRoomUsers[socketID](
-          `<ENTER${RECOGNIZED_ATTRIBUTES.ENTER.map((name) =>
-            attributes[name] ? ` ${name}="${attributes[name]}"` : '',
-          ).join('')} />\0`,
+        sendToRoomUsers(
+          `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />\0`,
         );
-      }
 
-      sendToRoomUsers[socketID](
-        `<COUNT c="${userCounts[roomPaths[socketID]]}" n="${
-          roomNames[socketID]
-        }" />\0`,
-      );
+        if (userSockets[parentRoomPath]) {
+          sendToRoomUsers(
+            `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>\0`,
+            userSockets[parentRoomPath],
+          );
+        }
+      },
+      '<EXIT>': () => {
+        if (!roomPath) {
+          client.write(`<EXIT id="${clientID}" />\0`);
+          return;
+        }
 
-      if (userSockets[parentRoomPaths[socketID]]) {
-        sendToRoomUsers[socketID](
-          `<COUNT><ROOM c="${userCounts[roomPaths[socketID]]}" n="${
-            roomNames[socketID]
-          }" /></COUNT>\0`,
-          userSockets[parentRoomPaths[socketID]],
+        userCounts[roomPath] -= 1;
+        delete userAttributes[roomPath][clientID];
+
+        sendToRoomUsers(`<EXIT id="${clientID}" />\0`);
+
+        sendToRoomUsers(
+          `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />\0`,
         );
-      }
-    },
-    '<EXIT>': (client, socketID) => {
-      if (!roomPaths[socketID]) {
-        client.write(`<EXIT id="${clientIDs[socketID]}" />\0`);
-        return;
-      }
 
-      userCounts[roomPaths[socketID]] -= 1;
-      delete userAttributes[roomPaths[socketID]][clientIDs[socketID]];
+        delete userSockets[roomPath][clientID];
 
-      sendToRoomUsers[socketID](`<EXIT id="${clientIDs[socketID]}" />\0`);
-
-      sendToRoomUsers[socketID](
-        `<COUNT c="${userCounts[roomPaths[socketID]]}" n="${
-          roomNames[socketID]
-        }" />\0`,
-      );
-
-      delete userSockets[roomPaths[socketID]][clientIDs[socketID]];
-
-      if (userSockets[parentRoomPaths[socketID]]) {
-        sendToRoomUsers[socketID](
-          `<COUNT><ROOM c="${userCounts[roomPaths[socketID]]}" n="${
-            roomNames[socketID]
-          }" /></COUNT>\0`,
-          userSockets[parentRoomPaths[socketID]],
-        );
-      }
-
-      delete roomPaths[socketID];
-      delete parentRoomPaths[socketID];
-      delete roomNames[socketID];
-    },
-    default: (client, socketID, attributes, rootTagName) => {
-      if (RECOGNIZED_ATTRIBUTES[rootTagName]) {
-        if (rootTagName === 'SET') {
-          Object.assign(
-            userAttributes[roomPaths[socketID]][clientIDs[socketID]],
-            attributes,
+        if (userSockets[parentRoomPath]) {
+          sendToRoomUsers(
+            `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>\0`,
+            userSockets[parentRoomPath],
           );
         }
 
-        sendToRoomUsers[socketID](
-          `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
-            .map((name) =>
-              name === 'id'
-                ? ` id="${clientIDs[socketID]}"`
-                : attributes[name]
-                ? ` ${name}="${attributes[name]}"`
-                : '',
-            )
-            .join('')} />\0`,
-        );
+        roomPath = undefined;
+        parentRoomPath = undefined;
+        roomName = undefined;
+      },
+      default: (attributes, rootTagName) => {
+        if (RECOGNIZED_ATTRIBUTES[rootTagName]) {
+          if (rootTagName === 'SET') {
+            Object.assign(userAttributes[roomPath][clientID], attributes);
+          }
 
-        return;
+          sendToRoomUsers(
+            `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
+              .map((name) =>
+                name === 'id'
+                  ? ` id="${clientID}"`
+                  : attributes[name]
+                  ? ` ${name}="${attributes[name]}"`
+                  : '',
+              )
+              .join('')} />\0`,
+          );
+
+          return;
+        }
+
+        client.destroy();
+      },
+    });
+
+    client.on('end', () => {
+      if (!clientID) return;
+
+      freeIDs.unshift(clientID);
+      delete loggedIDs[clientID];
+
+      if (!roomPath) return;
+
+      userCounts[roomPath] -= 1;
+      delete userSockets[roomPath][clientID];
+      delete userAttributes[roomPath][clientID];
+
+      sendToRoomUsers(`<EXIT id="${clientID}" />\0`);
+
+      sendToRoomUsers(
+        `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />\0`,
+      );
+
+      if (userSockets[parentRoomPath]) {
+        sendToRoomUsers(
+          `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>\0`,
+          userSockets[parentRoomPath],
+        );
       }
 
-      client.destroy();
-    },
-  },
-  (client, socketID) => {
-    if (!clientIDs[socketID]) return;
-
-    freeIDs.unshift(clientIDs[socketID]);
-    delete loggedIDs[clientIDs[socketID]];
-
-    if (!roomPaths[socketID]) return;
-
-    userCounts[roomPaths[socketID]] -= 1;
-    delete userSockets[roomPaths[socketID]][clientIDs[socketID]];
-    delete userAttributes[roomPaths[socketID]][clientIDs[socketID]];
-
-    sendToRoomUsers[socketID](`<EXIT id="${clientIDs[socketID]}" />\0`);
-
-    sendToRoomUsers[socketID](
-      `<COUNT c="${userCounts[roomPaths[socketID]]}" n="${
-        roomNames[socketID]
-      }" />\0`,
-    );
-
-    if (userSockets[parentRoomPaths[socketID]]) {
-      sendToRoomUsers[socketID](
-        `<COUNT><ROOM c="${userCounts[roomPaths[socketID]]}" n="${
-          roomNames[socketID]
-        }" /></COUNT>\0`,
-        userSockets[parentRoomPaths[socketID]],
-      );
-    }
-
-    delete roomPaths[socketID];
-    delete parentRoomPaths[socketID];
-    delete roomNames[socketID];
+      roomPath = undefined;
+      parentRoomPath = undefined;
+      roomName = undefined;
+    });
   },
 );
