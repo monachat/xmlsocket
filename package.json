@@ -1,0 +1,35 @@
+{
+  "name": "xmlsocket",
+  "version": "0.1.0",
+  "description": "Flash's XMLSocket server and client for Node.js",
+  "main": "lib/XMLSocket.mjs",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/monachat/xmlsocket.git"
+  },
+  "keywords": [
+    "xmlsocket"
+  ],
+  "author": "Yuuki Konno",
+  "license": "AGPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/monachat/xmlsocket/issues"
+  },
+  "homepage": "https://github.com/monachat/xmlsocket#readme",
+  "devDependencies": {
+    "eslint": "^6.0.1",
+    "eslint-config-airbnb-base": "^13.2.0",
+    "eslint-config-prettier": "^6.0.0",
+    "eslint-plugin-import": "^2.18.0",
+    "eslint-plugin-prettier": "^3.1.0",
+    "prettier": "^1.18.2"
+  },
+  "dependencies": {
+    "2ch-trip": "^1.0.1",
+    "xml2js": "^0.4.19"
+  }
+}
