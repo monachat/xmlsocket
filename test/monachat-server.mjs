@@ -94,6 +94,11 @@ const server = new XMLSocket.Server(
 
         if (umax && userCounts[roomPath] && userCounts[roomPath] >= umax) {
           client.write('<FULL />\0');
+
+          roomPath = undefined;
+          parentRoomPath = undefined;
+          roomName = undefined;
+
           return;
         }
 
