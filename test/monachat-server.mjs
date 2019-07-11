@@ -222,27 +222,26 @@ const server = new XMLSocket.Server(
         roomName = undefined;
       },
       default: (attributes, rootTagName) => {
-        if (RECOGNIZED_ATTRIBUTES[rootTagName]) {
-          if (rootTagName === 'SET') {
-            Object.assign(userAttributes[roomPath][clientID], attributes);
-          }
-
-          sendToRoomUsers(
-            `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
-              .map((name) =>
-                name === 'id'
-                  ? ` id="${clientID}"`
-                  : attributes[name]
-                  ? ` ${name}="${attributes[name]}"`
-                  : '',
-              )
-              .join('')} />\0`,
-          );
-
+        if (!RECOGNIZED_ATTRIBUTES[rootTagName]) {
+          client.destroy();
           return;
         }
 
-        client.destroy();
+        if (rootTagName === 'SET') {
+          Object.assign(userAttributes[roomPath][clientID], attributes);
+        }
+
+        sendToRoomUsers(
+          `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
+            .map((name) =>
+              name === 'id'
+                ? ` id="${clientID}"`
+                : attributes[name]
+                ? ` ${name}="${attributes[name]}"`
+                : '',
+            )
+            .join('')} />\0`,
+        );
       },
     });
 
