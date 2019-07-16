@@ -2,20 +2,27 @@ import xml2js from 'xml2js';
 
 import XMLSocket from '../lib/XMLSocket.mjs';
 
+const HOST = 'localhost';
 const PORT = 9095;
+
+const sleep = (seconds) =>
+  new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 
 const client = new XMLSocket(
   {
+    host: HOST,
     port: PORT,
   },
   () => {
-    client.write('MojaChat\0');
+    (async () => {
+      client.write('MojaChat\0');
 
-    client.write(
-      '<ENTER room="/MONA8094/1" umax="0" type="tibisii" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" />\0',
-    );
+      await sleep(0.1);
 
-    client.write('\0\0\0\0');
+      client.write(
+        '<ENTER ROOM="/MONA8091/1" umax="0" type="tibisii" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" />\0',
+      );
+    })();
   },
 );
 

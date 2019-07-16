@@ -71,7 +71,9 @@ new XMLSocket.Server(
     };
 
     const sendToRoomUsers = (message, sockets = userSockets[roomPath]) => {
-      if (!sockets) return;
+      if (!sockets) {
+        return;
+      }
 
       Object.values(sockets).forEach((socket) => {
         send(message, socket);
@@ -104,7 +106,7 @@ new XMLSocket.Server(
         freeIDs.unshift(clientID);
         delete loggedIDs[clientID];
 
-        if (roomPath) {
+        if (roomPath != null) {
           onExit();
         }
       }
@@ -163,9 +165,23 @@ new XMLSocket.Server(
                 return;
               }
               case 'ENTER': {
-                roomPath = path.normalize(attributes.room);
+                roomPath = path.normalize(attributes.room || '');
+
+                if (roomPath === '.' || roomPath === './') {
+                  roomPath = '';
+                }
+
                 parentRoomPath = path.dirname(roomPath);
+
+                if (parentRoomPath === '.') {
+                  parentRoomPath = '';
+                }
+
                 roomName = path.basename(roomPath);
+
+                if (roomName === '.') {
+                  roomName = '';
+                }
 
                 const umax = Number(attributes.umax);
 
@@ -289,9 +305,8 @@ new XMLSocket.Server(
                 return;
               }
               case 'EXIT': {
-                if (!roomPath) {
-                  client.destroy();
-                  throw new StopIteration();
+                if (roomPath == null) {
+                  return;
                 }
 
                 send(`<EXIT id="${clientID}" />`);
