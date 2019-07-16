@@ -1,9 +1,9 @@
+import xml2js from 'xml2js';
+
 import XMLSocket from '../lib/XMLSocket.mjs';
 
 const client = new XMLSocket({ port: 9095 }, () => {
   client.write('MojaChat\0');
-
-  client.write('<policy-file-request/>\0');
 
   client.write(
     '<ENTER room="/MONA8094" name="名無しさん" trip="" attrib="no"/>\0',
@@ -17,10 +17,34 @@ const client = new XMLSocket({ port: 9095 }, () => {
 });
 
 client.on('data', (data) => {
-  console.log(
-    String(data)
-      .replace(/\0$/, '')
-      .split('\0')
-      .join('\n'),
-  );
+  const lines = String(data)
+    .replace(/\0$/, '')
+    .split('\0');
+
+  lines.forEach((line) => {
+    console.log(line);
+
+    xml2js.parseString(line, (error, object) => {
+      /*      if (error) {
+        return;
+      } */
+
+      const rootTagName = Object.keys(object)[0];
+      const attributes = object[rootTagName].$ || {};
+
+      switch (rootTagName) {
+        case 'COM': {
+          const { cmt } = attributes;
+
+          switch (cmt) {
+            case 'unko': {
+              client.write('unko\0');
+            }
+            // no default
+          }
+        }
+        // no default
+      }
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import path from 'path';
 
 import tripcode2ch from '2ch-trip';
+import xml2js from 'xml2js';
 
 import XMLSocket from '../lib/XMLSocket.mjs';
 
@@ -58,221 +59,37 @@ new XMLSocket.Server(
     host: HOST,
     port: PORT,
   },
-  (client, registerHandlers) => {
+  (client) => {
     let clientID;
 
     let roomPath;
     let parentRoomPath;
     let roomName;
 
+    const send = (message, socket = client) => {
+      socket.write(`${message}\0`);
+    };
+
     const sendToRoomUsers = (message, sockets = userSockets[roomPath]) => {
+      if (!sockets) return;
+
       Object.values(sockets).forEach((socket) => {
-        socket.write(message);
+        send(message, socket);
       });
     };
 
-    registerHandlers({
-      MojaChat: () => {
-        if (freeIDs.length) {
-          clientID = freeIDs.pop();
-        } else {
-          maxID += 1;
-          clientID = maxID;
-        }
-
-        loggedIDs[clientID] = (loggedIDs[clientID] || 0) + 1;
-
-        client.write(`+connect id=${clientID}\0`);
-        client.write(`<CONNECT id="${clientID}" />\0`);
-      },
-      '<policy-file-request>': () => {},
-      '<NOP>': () => {},
-      '<ENTER>': (attributes) => {
-        roomPath = path.normalize(attributes.room);
-        parentRoomPath = path.dirname(roomPath);
-        roomName = path.basename(roomPath);
-
-        const umax = Number(attributes.umax);
-
-        if (umax && userCounts[roomPath] && userCounts[roomPath] >= umax) {
-          client.write('<FULL />\0');
-
-          roomPath = undefined;
-          parentRoomPath = undefined;
-          roomName = undefined;
-
-          return;
-        }
-
-        userCounts[roomPath] = (userCounts[roomPath] || 0) + 1;
-
-        userSockets[roomPath] = userSockets[roomPath] || {};
-        userSockets[roomPath][clientID] = client;
-
-        userAttributes[roomPath] = userAttributes[roomPath] || {};
-
-        if (Object.entries(userAttributes[roomPath]).length) {
-          client.write(
-            `<ROOM>${Object.values(userAttributes[roomPath])
-              .map(
-                (value) =>
-                  `<USER${[
-                    'r',
-                    'name',
-                    'id',
-                    'trip',
-                    'ihash',
-                    'stat',
-                    'g',
-                    'type',
-                    'b',
-                    'y',
-                    'x',
-                    'scl',
-                  ]
-                    .map((name) =>
-                      value[name] ? ` ${name}="${value[name]}"` : '',
-                    )
-                    .join('')} />`,
-              )
-              .join('')}</ROOM>\0`,
-          );
-        } else {
-          client.write('<ROOM />\0');
-        }
-
-        userAttributes[roomPath][clientID] = attributes;
-
-        userAttributes[roomPath][clientID].id = clientID;
-
-        if ('trip' in attributes) {
-          userAttributes[roomPath][clientID].trip = tripcode(attributes.trip);
-        }
-
-        userAttributes[roomPath][clientID].ihash = tripcode(
-          client.remoteAddress,
-        );
-
-        if (attributes.attrib === 'no') {
-          client.write(
-            `<UINFO${['name', 'trip', 'id']
-              .map((name) =>
-                attributes[name] ? ` ${name}="${attributes[name]}"` : '',
-              )
-              .join('')} />\0`,
-          );
-
-          const childRoomUserCounts = {};
-
-          for (let i = 1; i <= NUMBER_OF_ROOMS; i += 1) {
-            const childRoomPath = `${roomPath}/${i}`;
-
-            if (childRoomPath in userCounts) {
-              childRoomUserCounts[i] = userCounts[childRoomPath];
-            }
-          }
-
-          if (Object.entries(childRoomUserCounts).length) {
-            client.write(
-              `<COUNT>${Object.entries(childRoomUserCounts)
-                .map(([number, count]) => `<ROOM c="${count}" n="${number}" />`)
-                .join('')}</COUNT>\0`,
-            );
-          }
-
-          sendToRoomUsers(`<ENTER id="${clientID}" />\0`);
-        } else {
-          sendToRoomUsers(
-            `<ENTER${RECOGNIZED_ATTRIBUTES.ENTER.map((name) =>
-              attributes[name] ? ` ${name}="${attributes[name]}"` : '',
-            ).join('')} />\0`,
-          );
-        }
-
-        sendToRoomUsers(
-          `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />\0`,
-        );
-
-        if (userSockets[parentRoomPath]) {
-          sendToRoomUsers(
-            `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>\0`,
-            userSockets[parentRoomPath],
-          );
-        }
-      },
-      '<EXIT>': () => {
-        if (!roomPath) {
-          client.write(`<EXIT id="${clientID}" />\0`);
-          return;
-        }
-
-        userCounts[roomPath] -= 1;
-        delete userAttributes[roomPath][clientID];
-
-        sendToRoomUsers(`<EXIT id="${clientID}" />\0`);
-
-        sendToRoomUsers(
-          `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />\0`,
-        );
-
-        delete userSockets[roomPath][clientID];
-
-        if (userSockets[parentRoomPath]) {
-          sendToRoomUsers(
-            `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>\0`,
-            userSockets[parentRoomPath],
-          );
-        }
-
-        roomPath = undefined;
-        parentRoomPath = undefined;
-        roomName = undefined;
-      },
-      default: (attributes, rootTagName) => {
-        if (!RECOGNIZED_ATTRIBUTES[rootTagName]) {
-          client.destroy();
-          return;
-        }
-
-        if (rootTagName === 'SET') {
-          Object.assign(userAttributes[roomPath][clientID], attributes);
-        }
-
-        sendToRoomUsers(
-          `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
-            .map((name) =>
-              name === 'id'
-                ? ` id="${clientID}"`
-                : attributes[name]
-                ? ` ${name}="${attributes[name]}"`
-                : '',
-            )
-            .join('')} />\0`,
-        );
-      },
-    });
-
-    client.on('end', () => {
-      if (!clientID) return;
-
-      freeIDs.unshift(clientID);
-      delete loggedIDs[clientID];
-
-      if (!roomPath) return;
-
+    const onExit = () => {
       userCounts[roomPath] -= 1;
-      delete userSockets[roomPath][clientID];
       delete userAttributes[roomPath][clientID];
+      delete userSockets[roomPath][clientID];
 
-      sendToRoomUsers(`<EXIT id="${clientID}" />\0`);
+      sendToRoomUsers(`<EXIT id="${clientID}" />`);
 
-      sendToRoomUsers(
-        `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />\0`,
-      );
+      sendToRoomUsers(`<COUNT c="${userCounts[roomPath]}" n="${roomName}" />`);
 
       if (userSockets[parentRoomPath]) {
         sendToRoomUsers(
-          `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>\0`,
+          `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>`,
           userSockets[parentRoomPath],
         );
       }
@@ -280,6 +97,239 @@ new XMLSocket.Server(
       roomPath = undefined;
       parentRoomPath = undefined;
       roomName = undefined;
+    };
+
+    client.on('data', (data) => {
+      const lines = String(data)
+        .replace(/\0$/, '')
+        .split('\0');
+
+      console.log(lines);
+
+      class StopIteration extends Error {}
+
+      try {
+        lines.forEach((line) => {
+          if (line === 'MojaChat') {
+            if (freeIDs.length) {
+              clientID = freeIDs.pop();
+            } else {
+              maxID += 1;
+              clientID = maxID;
+            }
+
+            loggedIDs[clientID] = (loggedIDs[clientID] || 0) + 1;
+
+            send(`+connect id=${clientID}`);
+            send(`<CONNECT id="${clientID}" />`);
+
+            return;
+          }
+
+          if (!clientID) {
+            client.destroy();
+            throw new StopIteration();
+          }
+
+          xml2js.parseString(line, (error, object) => {
+            if (error) {
+              client.destroy();
+              throw new StopIteration();
+            }
+
+            const rootTagName = Object.keys(object)[0];
+            const attributes = object[rootTagName].$ || {};
+
+            switch (rootTagName) {
+              case 'policy-file-request': {
+                return;
+              }
+              case 'NOP': {
+                return;
+              }
+              case 'ENTER': {
+                roomPath = path.normalize(attributes.room);
+                parentRoomPath = path.dirname(roomPath);
+                roomName = path.basename(roomPath);
+
+                const umax = Number(attributes.umax);
+
+                if (
+                  umax &&
+                  userCounts[roomPath] &&
+                  userCounts[roomPath] >= umax
+                ) {
+                  send('<FULL />');
+
+                  roomPath = undefined;
+                  parentRoomPath = undefined;
+                  roomName = undefined;
+
+                  return;
+                }
+
+                userCounts[roomPath] = (userCounts[roomPath] || 0) + 1;
+
+                userSockets[roomPath] = userSockets[roomPath] || {};
+                userSockets[roomPath][clientID] = client;
+
+                userAttributes[roomPath] = userAttributes[roomPath] || {};
+
+                if (Object.entries(userAttributes[roomPath]).length) {
+                  send(
+                    `<ROOM>${Object.values(userAttributes[roomPath])
+                      .map(
+                        (value) =>
+                          `<USER${[
+                            'r',
+                            'name',
+                            'id',
+                            'trip',
+                            'ihash',
+                            'stat',
+                            'g',
+                            'type',
+                            'b',
+                            'y',
+                            'x',
+                            'scl',
+                          ]
+                            .map((name) =>
+                              value[name] ? ` ${name}="${value[name]}"` : '',
+                            )
+                            .join('')} />`,
+                      )
+                      .join('')}</ROOM>`,
+                  );
+                } else {
+                  send('<ROOM />');
+                }
+
+                userAttributes[roomPath][clientID] = attributes;
+
+                userAttributes[roomPath][clientID].id = clientID;
+
+                if ('trip' in attributes) {
+                  userAttributes[roomPath][clientID].trip = tripcode(
+                    attributes.trip,
+                  );
+                }
+
+                userAttributes[roomPath][clientID].ihash = tripcode(
+                  client.remoteAddress,
+                );
+
+                if (attributes.attrib === 'no') {
+                  send(
+                    `<UINFO${['name', 'trip', 'id']
+                      .map((name) =>
+                        attributes[name]
+                          ? ` ${name}="${attributes[name]}"`
+                          : '',
+                      )
+                      .join('')} />`,
+                  );
+
+                  const childRoomUserCounts = {};
+
+                  for (let i = 1; i <= NUMBER_OF_ROOMS; i += 1) {
+                    const childRoomPath = `${roomPath}/${i}`;
+
+                    if (childRoomPath in userCounts) {
+                      childRoomUserCounts[i] = userCounts[childRoomPath];
+                    }
+                  }
+
+                  if (Object.entries(childRoomUserCounts).length) {
+                    send(
+                      `<COUNT>${Object.entries(childRoomUserCounts)
+                        .map(
+                          ([number, count]) =>
+                            `<ROOM c="${count}" n="${number}" />`,
+                        )
+                        .join('')}</COUNT>`,
+                    );
+                  }
+
+                  sendToRoomUsers(`<ENTER id="${clientID}" />`);
+                } else {
+                  sendToRoomUsers(
+                    `<ENTER${RECOGNIZED_ATTRIBUTES.ENTER.map((name) =>
+                      attributes[name] ? ` ${name}="${attributes[name]}"` : '',
+                    ).join('')} />`,
+                  );
+                }
+
+                sendToRoomUsers(
+                  `<COUNT c="${userCounts[roomPath]}" n="${roomName}" />`,
+                );
+
+                if (userSockets[parentRoomPath]) {
+                  sendToRoomUsers(
+                    `<COUNT><ROOM c="${userCounts[roomPath]}" n="${roomName}" /></COUNT>`,
+                    userSockets[parentRoomPath],
+                  );
+                }
+
+                return;
+              }
+              case 'EXIT': {
+                if (!roomPath) {
+                  client.destroy();
+                  throw new StopIteration();
+                }
+
+                send(`<EXIT id="${clientID}" />`);
+
+                onExit();
+
+                return;
+              }
+              default: {
+                if (!RECOGNIZED_ATTRIBUTES[rootTagName]) {
+                  client.destroy();
+                  throw new StopIteration();
+                }
+
+                if (rootTagName === 'SET') {
+                  Object.assign(userAttributes[roomPath][clientID], attributes);
+                }
+
+                sendToRoomUsers(
+                  `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
+                    .map((name) =>
+                      name === 'id'
+                        ? ` id="${clientID}"`
+                        : attributes[name]
+                        ? ` ${name}="${attributes[name]}"`
+                        : '',
+                    )
+                    .join('')} />`,
+                );
+              }
+            }
+          });
+        });
+      } catch (error) {
+        if (!(error instanceof StopIteration)) {
+          throw error;
+        }
+      }
     });
+
+    const onEnd = () => {
+      if (clientID) {
+        freeIDs.unshift(clientID);
+        delete loggedIDs[clientID];
+
+        if (roomPath) {
+          onExit();
+        }
+      }
+    };
+
+    client.on('end', onEnd);
+
+    client.on('error', onEnd);
   },
 );
