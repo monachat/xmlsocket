@@ -165,23 +165,9 @@ new XMLSocket.Server(
                 return;
               }
               case 'ENTER': {
-                roomPath = path.normalize(attributes.room || '');
-
-                if (roomPath === '.' || roomPath === './') {
-                  roomPath = '';
-                }
-
+                roomPath = path.resolve('/', attributes.room || '');
                 parentRoomPath = path.dirname(roomPath);
-
-                if (parentRoomPath === '.') {
-                  parentRoomPath = '';
-                }
-
                 roomName = path.basename(roomPath);
-
-                if (roomName === '.') {
-                  roomName = '';
-                }
 
                 const umax = Number(attributes.umax);
 
@@ -263,20 +249,29 @@ new XMLSocket.Server(
 
                   const childRoomUserCounts = {};
 
-                  for (let i = 1; i <= MAX_NUMBER_OF_ROOMS; i += 1) {
-                    const childRoomPath = `${roomPath}/${i}`;
+                  Object.entries(userCounts).forEach(
+                    ([childRoomPath, count]) => {
+                      const matches = childRoomPath.match(
+                        new RegExp(
+                          `^${roomPath
+                            .replace(/\/$/, '')
+                            .replace(/(\W)/g, '\\$1')}/([^/]+)$`,
+                        ),
+                      );
 
-                    if (childRoomPath in userCounts) {
-                      childRoomUserCounts[i] = userCounts[childRoomPath];
-                    }
-                  }
+                      if (!matches) return;
+
+                      const childRoomName = matches[1];
+                      childRoomUserCounts[childRoomName] = count;
+                    },
+                  );
 
                   if (Object.entries(childRoomUserCounts).length) {
                     send(
                       `<COUNT>${Object.entries(childRoomUserCounts)
                         .map(
-                          ([number, count]) =>
-                            `<ROOM c="${count}" n="${number}" />`,
+                          ([childRoomName, count]) =>
+                            `<ROOM c="${count}" n="${childRoomName}" />`,
                         )
                         .join('')}</COUNT>`,
                     );

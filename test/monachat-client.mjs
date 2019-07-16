@@ -19,9 +19,15 @@ const client = new XMLSocket(
 
       await sleep(0.1);
 
-      client.write(
-        '<ENTER ROOM="/MONA8091/1" umax="0" type="tibisii" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" />\0',
-      );
+      for (let i = 768; i < 10000; i++) {
+        client.write('<EXIT />\0');
+        await sleep(0.1);
+
+        client.write(
+          `<ENTER room="/MONA8094/${i}" umax="0" type="tibisii" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" attrib="no"/>\0`,
+        );
+        await sleep(0.1);
+      }
     })();
   },
 );
