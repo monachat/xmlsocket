@@ -44,14 +44,16 @@ const userCounts = {};
 const userSockets = {};
 const userAttributes = {};
 
-const socketPolicyFileServer = new XMLSocket.SocketPolicyFileServer(
+// eslint-disable-next-line no-new
+new XMLSocket.SocketPolicyFileServer(
   {
     host: HOST,
   },
   '<cross-domain-policy><allow-access-from domain="monachat.dyndns.org" to-ports="843,9090-9100" /><allow-access-from domain="monachat.net" to-ports="843,9090-9100" /><allow-access-from domain="chat.moja.jp" to-ports="843,9090-9100" /><allow-access-from domain="cool.moja.jp" to-ports="843,9090-9100" /></cross-domain-policy>',
 );
 
-const server = new XMLSocket.Server(
+// eslint-disable-next-line no-new
+new XMLSocket.Server(
   {
     host: HOST,
     port: PORT,
