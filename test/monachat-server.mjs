@@ -11,14 +11,16 @@ const tripcode = (password) =>
 const HOST = 'localhost';
 const PORT = 9095;
 
+const MAX_NUMBER_OF_CONNECTIONS_PER_HOST = 1;
+
 // const MAX_NUMBER_OF_ROOMS = 100;
 
 const RECOGNIZED_ATTRIBUTES = {
   ENTER: [
     'r',
     'name',
-    'trip',
     'id',
+    'trip',
     'cmd',
     'param',
     'ihash',
@@ -41,6 +43,8 @@ const loggedIDs = {};
 const freeIDs = [];
 let maxID = 0;
 
+const hostCounts = {};
+
 const userCounts = {};
 const userSockets = {};
 const userAttributes = {};
@@ -60,6 +64,17 @@ new XMLSocket.Server(
     port: PORT,
   },
   (client) => {
+    if (
+      hostCounts[client.remoteAddress] &&
+      hostCounts[client.remoteAddress] >= MAX_NUMBER_OF_CONNECTIONS_PER_HOST
+    ) {
+      client.destroy();
+      return;
+    }
+
+    hostCounts[client.remoteAddress] =
+      (hostCounts[client.remoteAddress] || 0) + 1;
+
     let clientID;
 
     let roomPath;
@@ -78,6 +93,19 @@ new XMLSocket.Server(
       Object.values(sockets).forEach((socket) => {
         send(message, socket);
       });
+    };
+
+    const onEnd = () => {
+      hostCounts[client.remoteAddress] -= 1;
+
+      if (clientID) {
+        freeIDs.unshift(clientID);
+        delete loggedIDs[clientID];
+
+        if (roomPath != null) {
+          onExit();
+        }
+      }
     };
 
     const onExit = () => {
@@ -101,17 +129,6 @@ new XMLSocket.Server(
       roomName = undefined;
     };
 
-    const onEnd = () => {
-      if (clientID) {
-        freeIDs.unshift(clientID);
-        delete loggedIDs[clientID];
-
-        if (roomPath != null) {
-          onExit();
-        }
-      }
-    };
-
     client.on('data', (bytes) => {
       const string = String(bytes);
 
@@ -127,7 +144,7 @@ new XMLSocket.Server(
 
       try {
         lines.forEach((line) => {
-          if (line === 'MojaChat') {
+          if (!clientID && line === 'MojaChat') {
             if (freeIDs.length) {
               clientID = freeIDs.pop();
             } else {
@@ -143,11 +160,6 @@ new XMLSocket.Server(
             return;
           }
 
-          if (!clientID) {
-            client.destroy();
-            throw new StopIteration();
-          }
-
           xml2js.parseString(line, (error, object) => {
             if (error || !object) {
               client.destroy();
@@ -155,13 +167,24 @@ new XMLSocket.Server(
             }
 
             const rootTagName = Object.keys(object)[0];
+
+            if (!clientID) {
+              if (rootTagName === 'policy-file-request') {
+                send(
+                  '<cross-domain-policy><allow-access-from domain="monachat.dyndns.org" to-ports="9090-9100" /><allow-access-from domain="monachat.net" to-ports="9090-9100" /><allow-access-from domain="chat.moja.jp" to-ports="9090-9100" /><allow-access-from domain="cool.moja.jp" to-ports="9090-9100" /></cross-domain-policy>',
+                );
+
+                send('Connection timeout..');
+              }
+
+              client.destroy();
+              throw new StopIteration();
+            }
+
             const attributes = object[rootTagName].$ || {};
             attributes.id = clientID;
 
             switch (rootTagName) {
-              case 'policy-file-request': {
-                return;
-              }
               case 'NOP': {
                 return;
               }
