@@ -11,7 +11,7 @@ const tripcode = (password) =>
 const HOST = 'localhost';
 const PORT = 9095;
 
-const MAX_NUMBER_OF_ROOMS = 100;
+// const MAX_NUMBER_OF_ROOMS = 100;
 
 const RECOGNIZED_ATTRIBUTES = {
   ENTER: [
@@ -156,6 +156,7 @@ new XMLSocket.Server(
 
             const rootTagName = Object.keys(object)[0];
             const attributes = object[rootTagName].$ || {};
+            attributes.id = clientID;
 
             switch (rootTagName) {
               case 'policy-file-request': {
@@ -211,8 +212,8 @@ new XMLSocket.Server(
                             'x',
                             'scl',
                           ]
-                            .map((name) =>
-                              value[name] ? ` ${name}="${value[name]}"` : '',
+                            .map((key) =>
+                              value[key] ? ` ${key}="${value[key]}"` : '',
                             )
                             .join('')} />`,
                       )
@@ -223,8 +224,6 @@ new XMLSocket.Server(
                 }
 
                 userAttributes[roomPath][clientID] = attributes;
-
-                userAttributes[roomPath][clientID].id = clientID;
 
                 if ('trip' in attributes) {
                   userAttributes[roomPath][clientID].trip = tripcode(
@@ -239,10 +238,8 @@ new XMLSocket.Server(
                 if (attributes.attrib === 'no') {
                   send(
                     `<UINFO${['name', 'trip', 'id']
-                      .map((name) =>
-                        attributes[name]
-                          ? ` ${name}="${attributes[name]}"`
-                          : '',
+                      .map((key) =>
+                        attributes[key] ? ` ${key}="${attributes[key]}"` : '',
                       )
                       .join('')} />`,
                   );
@@ -280,8 +277,8 @@ new XMLSocket.Server(
                   sendToRoomUsers(`<ENTER id="${clientID}" />`);
                 } else {
                   sendToRoomUsers(
-                    `<ENTER${RECOGNIZED_ATTRIBUTES.ENTER.map((name) =>
-                      attributes[name] ? ` ${name}="${attributes[name]}"` : '',
+                    `<ENTER${RECOGNIZED_ATTRIBUTES.ENTER.map((key) =>
+                      attributes[key] ? ` ${key}="${attributes[key]}"` : '',
                     ).join('')} />`,
                   );
                 }
@@ -317,17 +314,20 @@ new XMLSocket.Server(
                 }
 
                 if (rootTagName === 'SET') {
-                  Object.assign(userAttributes[roomPath][clientID], attributes);
+                  Object.assign(
+                    userAttributes[roomPath][clientID],
+                    Object.fromEntries(
+                      Object.entries(attributes).filter(([key]) =>
+                        RECOGNIZED_ATTRIBUTES[rootTagName].includes(key),
+                      ),
+                    ),
+                  );
                 }
 
                 sendToRoomUsers(
                   `<${rootTagName}${RECOGNIZED_ATTRIBUTES[rootTagName]
-                    .map((name) =>
-                      name === 'id'
-                        ? ` id="${clientID}"`
-                        : attributes[name]
-                        ? ` ${name}="${attributes[name]}"`
-                        : '',
+                    .map((key) =>
+                      attributes[key] ? ` ${key}="${attributes[key]}"` : '',
                     )
                     .join('')} />`,
                 );
