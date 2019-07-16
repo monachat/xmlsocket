@@ -11,7 +11,7 @@ const tripcode = (password) =>
 const HOST = 'localhost';
 const PORT = 9095;
 
-const NUMBER_OF_ROOMS = 100;
+const MAX_NUMBER_OF_ROOMS = 100;
 
 const RECOGNIZED_ATTRIBUTES = {
   ENTER: [
@@ -99,11 +99,26 @@ new XMLSocket.Server(
       roomName = undefined;
     };
 
-    client.on('data', (data) => {
-      const lines = String(data)
-        .replace(/\0$/, '')
-        .split('\0');
+    const onEnd = () => {
+      if (clientID) {
+        freeIDs.unshift(clientID);
+        delete loggedIDs[clientID];
 
+        if (roomPath) {
+          onExit();
+        }
+      }
+    };
+
+    client.on('data', (bytes) => {
+      const string = String(bytes);
+
+      if (!string.endsWith('\0')) {
+        client.destroy();
+        return;
+      }
+
+      const lines = string.replace(/\0$/, '').split('\0');
       console.log(lines);
 
       class StopIteration extends Error {}
@@ -132,7 +147,7 @@ new XMLSocket.Server(
           }
 
           xml2js.parseString(line, (error, object) => {
-            if (error) {
+            if (error || !object) {
               client.destroy();
               throw new StopIteration();
             }
@@ -232,7 +247,7 @@ new XMLSocket.Server(
 
                   const childRoomUserCounts = {};
 
-                  for (let i = 1; i <= NUMBER_OF_ROOMS; i += 1) {
+                  for (let i = 1; i <= MAX_NUMBER_OF_ROOMS; i += 1) {
                     const childRoomPath = `${roomPath}/${i}`;
 
                     if (childRoomPath in userCounts) {
@@ -314,19 +329,10 @@ new XMLSocket.Server(
         if (!(error instanceof StopIteration)) {
           throw error;
         }
+
+        onEnd();
       }
     });
-
-    const onEnd = () => {
-      if (clientID) {
-        freeIDs.unshift(clientID);
-        delete loggedIDs[clientID];
-
-        if (roomPath) {
-          onExit();
-        }
-      }
-    };
 
     client.on('end', onEnd);
 
