@@ -68,7 +68,7 @@ new XMLSocket.Server(
       hostCounts[client.remoteAddress] &&
       hostCounts[client.remoteAddress] >= MAX_NUMBER_OF_CONNECTIONS_PER_HOST
     ) {
-      client.destroy();
+      client.end();
       return;
     }
 
@@ -133,7 +133,7 @@ new XMLSocket.Server(
       const string = String(bytes);
 
       if (!string.endsWith('\0')) {
-        client.destroy();
+        client.end();
         return;
       }
 
@@ -162,7 +162,7 @@ new XMLSocket.Server(
 
           xml2js.parseString(line, (error, object) => {
             if (error || !object) {
-              client.destroy();
+              client.end();
               throw new StopIteration();
             }
 
@@ -177,7 +177,7 @@ new XMLSocket.Server(
                 send('Connection timeout..');
               }
 
-              client.destroy();
+              client.end();
               throw new StopIteration();
             }
 
@@ -332,7 +332,7 @@ new XMLSocket.Server(
               }
               default: {
                 if (!RECOGNIZED_ATTRIBUTES[rootTagName]) {
-                  client.destroy();
+                  client.end();
                   throw new StopIteration();
                 }
 
