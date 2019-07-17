@@ -18,6 +18,7 @@ const TIMEOUT = 30;
 // const MAX_NUMBER_OF_ROOMS = 100;
 
 const MAX_MESSAGE_LENGTH = 50;
+const MIN_MESSAGE_INTERVAL = 2;
 
 const MAX_STATUS_LENGTH = 23;
 
@@ -88,11 +89,14 @@ new XMLSocket.Server(
 
     let clientID;
 
-    let timer;
+    let pingTimer;
 
     let roomPath;
     let parentRoomPath;
     let roomName;
+
+    let messageIntervalTimer;
+    let messageIntervalExceededCount = 0;
 
     const temporarilyBan = () => {
       temporarilyBannedHosts[client.remoteAddress] = true;
@@ -120,7 +124,7 @@ new XMLSocket.Server(
       });
     };
 
-    const setTimer = () =>
+    const setPingTimer = () =>
       setTimeout(() => {
         send('Connection timeout..');
         client.end();
@@ -185,7 +189,7 @@ new XMLSocket.Server(
 
             loggedIDs[clientID] = (loggedIDs[clientID] || 0) + 1;
 
-            timer = setTimer();
+            pingTimer = setPingTimer();
 
             send(`+connect id=${clientID}`);
             send(`<CONNECT id="${clientID}" />`);
@@ -217,8 +221,8 @@ new XMLSocket.Server(
             const attributes = object[rootTagName].$ || {};
             attributes.id = clientID;
 
-            clearTimeout(timer);
-            timer = setTimer();
+            clearTimeout(pingTimer);
+            pingTimer = setPingTimer();
 
             switch (rootTagName) {
               case 'NOP': {
@@ -360,9 +364,7 @@ new XMLSocket.Server(
                 }
 
                 send(`<EXIT id="${clientID}" />`);
-
                 onExit();
-
                 return;
               }
               case 'SET': {
@@ -386,6 +388,17 @@ new XMLSocket.Server(
               }
               // fallthrough
               case 'COM': {
+                if (messageIntervalTimer) {
+                  messageIntervalExceededCount += 1;
+                  clearTimeout(messageIntervalTimer);
+
+                  if (messageIntervalExceededCount >= 10) {
+                    client.end();
+                    temporarilyBan();
+                    throw new StopIteration();
+                  }
+                }
+
                 if (
                   attributes.cmt &&
                   attributes.cmt.length > MAX_MESSAGE_LENGTH
@@ -393,6 +406,10 @@ new XMLSocket.Server(
                   client.end();
                   throw new StopIteration();
                 }
+
+                messageIntervalTimer = setTimeout(() => {
+                  messageIntervalTimer = undefined;
+                }, MIN_MESSAGE_INTERVAL * 1e3);
               }
               // fallthrough
               default: {
