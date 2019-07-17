@@ -18,7 +18,9 @@ const TIMEOUT = 30;
 // const MAX_NUMBER_OF_ROOMS = 100;
 
 const MAX_MESSAGE_LENGTH = 50;
+
 const MIN_MESSAGE_INTERVAL = 2;
+const MAX_MESSAGE_INTERVAL_EXCEEDED_COUNT = 10;
 
 const MAX_STATUS_LENGTH = 23;
 
@@ -98,18 +100,6 @@ new XMLSocket.Server(
     let messageIntervalTimer;
     let messageIntervalExceededCount = 0;
 
-    const temporarilyBan = () => {
-      temporarilyBannedHosts[client.remoteAddress] = true;
-
-      banTime[client.remoteAddress] = !banTime[client.remoteAddress]
-        ? 10
-        : banTime[client.remoteAddress] * 5;
-
-      setTimeout(() => {
-        delete temporarilyBannedHosts[client.remoteAddress];
-      }, banTime[client.remoteAddress] * 1e3);
-    };
-
     const send = (message, socket = client) => {
       socket.write(`${message}\0`);
     };
@@ -129,6 +119,18 @@ new XMLSocket.Server(
         send('Connection timeout..');
         client.end();
       }, TIMEOUT * 1e3);
+
+    const temporarilyBan = () => {
+      temporarilyBannedHosts[client.remoteAddress] = true;
+
+      banTime[client.remoteAddress] = !banTime[client.remoteAddress]
+        ? 10
+        : banTime[client.remoteAddress] * 5;
+
+      setTimeout(() => {
+        delete temporarilyBannedHosts[client.remoteAddress];
+      }, banTime[client.remoteAddress] * 1e3);
+    };
 
     const onEnd = () => {
       connectionCounts[client.remoteAddress] -= 1;
@@ -392,7 +394,10 @@ new XMLSocket.Server(
                   messageIntervalExceededCount += 1;
                   clearTimeout(messageIntervalTimer);
 
-                  if (messageIntervalExceededCount >= 10) {
+                  if (
+                    messageIntervalExceededCount >=
+                    MAX_MESSAGE_INTERVAL_EXCEEDED_COUNT
+                  ) {
                     client.end();
                     temporarilyBan();
                     throw new StopIteration();
