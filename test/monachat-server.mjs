@@ -45,11 +45,14 @@ const RECOGNIZED_ATTRIBUTES = {
   IG: ['ihash', 'stat', 'id'],
 };
 
+const temporarilyBannedHosts = {};
+const banTime = {};
+
+const connectionCounts = {};
+
 const loggedIDs = {};
 const freeIDs = [];
 let maxID = 0;
-
-const hostCounts = {};
 
 const userCounts = {};
 const userSockets = {};
@@ -71,23 +74,37 @@ new XMLSocket.Server(
   },
   (client) => {
     if (
-      hostCounts[client.remoteAddress] &&
-      hostCounts[client.remoteAddress] >= MAX_NUMBER_OF_CONNECTIONS_PER_HOST
+      temporarilyBannedHosts[client.remoteAddress] ||
+      (connectionCounts[client.remoteAddress] &&
+        connectionCounts[client.remoteAddress] >=
+          MAX_NUMBER_OF_CONNECTIONS_PER_HOST)
     ) {
       client.end();
       return;
     }
 
-    hostCounts[client.remoteAddress] =
-      (hostCounts[client.remoteAddress] || 0) + 1;
+    connectionCounts[client.remoteAddress] =
+      (connectionCounts[client.remoteAddress] || 0) + 1;
 
     let clientID;
+
+    let timer;
 
     let roomPath;
     let parentRoomPath;
     let roomName;
 
-    let timer;
+    const temporarilyBan = () => {
+      temporarilyBannedHosts[client.remoteAddress] = true;
+
+      banTime[client.remoteAddress] = !banTime[client.remoteAddress]
+        ? 10
+        : banTime[client.remoteAddress] * 5;
+
+      setTimeout(() => {
+        delete temporarilyBannedHosts[client.remoteAddress];
+      }, banTime[client.remoteAddress] * 1e3);
+    };
 
     const send = (message, socket = client) => {
       socket.write(`${message}\0`);
@@ -110,7 +127,7 @@ new XMLSocket.Server(
       }, TIMEOUT * 1e3);
 
     const onEnd = () => {
-      hostCounts[client.remoteAddress] -= 1;
+      connectionCounts[client.remoteAddress] -= 1;
 
       if (clientID) {
         freeIDs.unshift(clientID);
@@ -295,7 +312,9 @@ new XMLSocket.Server(
                         ),
                       );
 
-                      if (!matches) return;
+                      if (!matches) {
+                        return;
+                      }
 
                       const childRoomName = matches[1];
                       childRoomUserCounts[childRoomName] = count;
@@ -352,7 +371,8 @@ new XMLSocket.Server(
                   attributes.stat.length > MAX_STATUS_LENGTH
                 ) {
                   client.end();
-                  return;
+                  temporarilyBan();
+                  throw new StopIteration();
                 }
 
                 Object.assign(
@@ -371,12 +391,14 @@ new XMLSocket.Server(
                   attributes.cmt.length > MAX_MESSAGE_LENGTH
                 ) {
                   client.end();
+                  throw new StopIteration();
                 }
               }
               // fallthrough
               default: {
                 if (!RECOGNIZED_ATTRIBUTES[rootTagName]) {
                   client.end();
+                  temporarilyBan();
                   throw new StopIteration();
                 }
 
