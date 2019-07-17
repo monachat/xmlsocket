@@ -91,7 +91,7 @@ new XMLSocket.Server(
 
     let clientID;
 
-    let pingTimer;
+    let timeoutTimer;
 
     let roomPath;
     let parentRoomPath;
@@ -114,7 +114,7 @@ new XMLSocket.Server(
       });
     };
 
-    const setPingTimer = () =>
+    const setTimeoutTimer = () =>
       setTimeout(() => {
         send('Connection timeout..');
         client.end();
@@ -191,7 +191,7 @@ new XMLSocket.Server(
 
             loggedIDs[clientID] = (loggedIDs[clientID] || 0) + 1;
 
-            pingTimer = setPingTimer();
+            timeoutTimer = setTimeoutTimer();
 
             send(`+connect id=${clientID}`);
             send(`<CONNECT id="${clientID}" />`);
@@ -223,8 +223,8 @@ new XMLSocket.Server(
             const attributes = object[rootTagName].$ || {};
             attributes.id = clientID;
 
-            clearTimeout(pingTimer);
-            pingTimer = setPingTimer();
+            clearTimeout(timeoutTimer);
+            timeoutTimer = setTimeoutTimer();
 
             switch (rootTagName) {
               case 'NOP': {

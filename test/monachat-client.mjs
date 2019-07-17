@@ -2,7 +2,7 @@ import xml2js from 'xml2js';
 
 import XMLSocket from '../lib/XMLSocket.mjs';
 
-const HOST = 'localhost';
+const HOST = 'monachat.dyndns.org';
 const PORT = 9095;
 
 const sleep = (seconds) =>
@@ -27,7 +27,7 @@ const client = new XMLSocket(
 
       for (let i = 0; i < 1000; i += 1) {
         client.write(`<COM  cmt="${i}" cnt="${i}" />\0`);
-        await sleep(0.1);
+        await sleep(2);
       }
     })();
   },
