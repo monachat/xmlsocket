@@ -13,7 +13,13 @@ const PORT = 9095;
 
 const MAX_NUMBER_OF_CONNECTIONS_PER_HOST = 1;
 
+const TIMEOUT = 30;
+
 // const MAX_NUMBER_OF_ROOMS = 100;
+
+const MAX_MESSAGE_LENGTH = 50;
+
+const MAX_STATUS_LENGTH = 23;
 
 const RECOGNIZED_ATTRIBUTES = {
   ENTER: [
@@ -81,6 +87,8 @@ new XMLSocket.Server(
     let parentRoomPath;
     let roomName;
 
+    let timer;
+
     const send = (message, socket = client) => {
       socket.write(`${message}\0`);
     };
@@ -94,6 +102,12 @@ new XMLSocket.Server(
         send(message, socket);
       });
     };
+
+    const setTimer = () =>
+      setTimeout(() => {
+        send('Connection timeout..');
+        client.end();
+      }, TIMEOUT * 1e3);
 
     const onEnd = () => {
       hostCounts[client.remoteAddress] -= 1;
@@ -154,6 +168,8 @@ new XMLSocket.Server(
 
             loggedIDs[clientID] = (loggedIDs[clientID] || 0) + 1;
 
+            timer = setTimer();
+
             send(`+connect id=${clientID}`);
             send(`<CONNECT id="${clientID}" />`);
 
@@ -184,14 +200,15 @@ new XMLSocket.Server(
             const attributes = object[rootTagName].$ || {};
             attributes.id = clientID;
 
+            clearTimeout(timer);
+            timer = setTimer();
+
             switch (rootTagName) {
               case 'NOP': {
                 return;
               }
               case 'ENTER': {
                 roomPath = path.resolve('/', attributes.room || '');
-                parentRoomPath = path.dirname(roomPath);
-                roomName = path.basename(roomPath);
 
                 const umax = Number(attributes.umax);
 
@@ -201,13 +218,12 @@ new XMLSocket.Server(
                   userCounts[roomPath] >= umax
                 ) {
                   send('<FULL />');
-
                   roomPath = undefined;
-                  parentRoomPath = undefined;
-                  roomName = undefined;
-
                   return;
                 }
+
+                parentRoomPath = path.dirname(roomPath);
+                roomName = path.basename(roomPath);
 
                 userCounts[roomPath] = (userCounts[roomPath] || 0) + 1;
 
@@ -330,21 +346,38 @@ new XMLSocket.Server(
 
                 return;
               }
+              case 'SET': {
+                if (
+                  attributes.stat &&
+                  attributes.stat.length > MAX_STATUS_LENGTH
+                ) {
+                  client.end();
+                  return;
+                }
+
+                Object.assign(
+                  userAttributes[roomPath][clientID],
+                  Object.fromEntries(
+                    Object.entries(attributes).filter(([key]) =>
+                      RECOGNIZED_ATTRIBUTES[rootTagName].includes(key),
+                    ),
+                  ),
+                );
+              }
+              // fallthrough
+              case 'COM': {
+                if (
+                  attributes.cmt &&
+                  attributes.cmt.length > MAX_MESSAGE_LENGTH
+                ) {
+                  client.end();
+                }
+              }
+              // fallthrough
               default: {
                 if (!RECOGNIZED_ATTRIBUTES[rootTagName]) {
                   client.end();
                   throw new StopIteration();
-                }
-
-                if (rootTagName === 'SET') {
-                  Object.assign(
-                    userAttributes[roomPath][clientID],
-                    Object.fromEntries(
-                      Object.entries(attributes).filter(([key]) =>
-                        RECOGNIZED_ATTRIBUTES[rootTagName].includes(key),
-                      ),
-                    ),
-                  );
                 }
 
                 sendToRoomUsers(

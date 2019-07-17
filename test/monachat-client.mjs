@@ -8,6 +8,8 @@ const PORT = 9095;
 const sleep = (seconds) =>
   new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 
+let t;
+
 const client = new XMLSocket(
   {
     host: HOST,
@@ -20,11 +22,21 @@ const client = new XMLSocket(
       await sleep(0.2);
 
       client.write(
-        '<ENTER room="/MONA8094/1" umax="0" type="tibisii" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" />\0',
+        '<ENTER room="/MONA8091/1" umax="0" type="tibisii" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" />\0',
       );
+
+      await sleep(0.2);
+
+      client.write(`<SET stat="${'あ'.repeat(23)}" />\0`);
+
+      t = Date.now();
     })();
   },
 );
+
+client.on('end', () => {
+  console.log(Date.now() - t);
+});
 
 client.on('data', (data) => {
   const lines = String(data)
