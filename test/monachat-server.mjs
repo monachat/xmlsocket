@@ -17,6 +17,10 @@ const TIMEOUT = 30;
 
 // const MAX_NUMBER_OF_ROOMS = 100;
 
+const MAX_NAME_LENGTH = 23;
+
+const MAX_TYPE_LENGTH = 23;
+
 const MAX_MESSAGE_LENGTH = 50;
 
 const MIN_MESSAGE_INTERVAL = 2;
@@ -231,6 +235,15 @@ new XMLSocket.Server(
                 return;
               }
               case 'ENTER': {
+                if (
+                  (attributes.name &&
+                    attributes.name.length > MAX_NAME_LENGTH) ||
+                  (attributes.type && attributes.type.length > MAX_TYPE_LENGTH)
+                ) {
+                  client.end();
+                  throw new StopIteration();
+                }
+
                 roomPath = path.resolve('/', attributes.room || '');
 
                 const umax = Number(attributes.umax);
@@ -298,13 +311,15 @@ new XMLSocket.Server(
                 );
 
                 if (attributes.attrib === 'no') {
-                  send(
-                    `<UINFO${['name', 'trip', 'id']
-                      .map((key) =>
-                        attributes[key] ? ` ${key}="${attributes[key]}"` : '',
-                      )
-                      .join('')} />`,
-                  );
+                  if ('name' in attributes) {
+                    send(
+                      `<UINFO${['name', 'trip', 'id']
+                        .map((key) =>
+                          attributes[key] ? ` ${key}="${attributes[key]}"` : '',
+                        )
+                        .join('')} />`,
+                    );
+                  }
 
                   const childRoomUserCounts = {};
 

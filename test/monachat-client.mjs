@@ -3,7 +3,7 @@ import xml2js from 'xml2js';
 import XMLSocket from '../lib/XMLSocket.mjs';
 
 const HOST = 'monachat.dyndns.org';
-const PORT = 9095;
+const PORT = 9090;
 
 const sleep = (seconds) =>
   new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
@@ -19,16 +19,7 @@ const client = new XMLSocket(
 
       await sleep(1);
 
-      client.write(
-        '<ENTER room="/COOL8099/1" umax="0" type="uchujin6" name="Momabot/2.1" trip="騨ﾚNWKJ諤" x="360" y="275" r="100" g="100" b="40" scl="100" stat="通常" />\0',
-      );
-
-      await sleep(1);
-
-      for (let i = 0; i < 1000; i += 1) {
-        client.write(`<COM  cmt="${i}" cnt="${i}" />\0`);
-        await sleep(2);
-      }
+      client.write('<ENTER room="/COOL8099" attrib="no"/>\0');
     })();
   },
 );
