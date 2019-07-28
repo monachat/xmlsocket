@@ -1,11 +1,11 @@
 {
   "name": "xmlsocket",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Flash's XMLSocket server and client for Node.js",
   "main": "lib/XMLSocket.mjs",
   "type": "module",
   "scripts": {
-    "test": "sudo node --experimental-modules test/monachat-server.mjs"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
@@ -21,15 +21,11 @@
   },
   "homepage": "https://github.com/monachat/xmlsocket#readme",
   "devDependencies": {
-    "2ch-trip": "^1.0.1",
     "eslint": "^6.0.1",
     "eslint-config-airbnb-base": "^13.2.0",
     "eslint-config-prettier": "^6.0.0",
     "eslint-plugin-import": "^2.18.0",
     "eslint-plugin-prettier": "^3.1.0",
     "prettier": "^1.18.2"
-  },
-  "dependencies": {
-    "xml2js": "^0.4.19"
   }
 }
